@@ -1,0 +1,63 @@
+release-groups:
+  - name: Nightly
+    targets:
+      - name: target1
+        branch: branch_name1
+        manifest: manifest_name1
+        lunch: lunch_name1
+        target_type: hw
+        actions:
+          - type: build
+            args:
+              branch: branch_name1
+              manifest: manifest_name1
+              lunch: lunch_name1
+          - type: validate
+            args:
+              test-tool: test_tool1
+              test-path: tests_smoke_tests
+          - type: freeze
+            args:
+              branch: branch_name1
+              manifest: manifest_name1
+              lunch: lunch_name1
+      - name: target2
+        branch: branch_name2
+        manifest: manifest_name2
+        lunch: lunch_name2
+        target_type: hw
+        actions:
+          - type: build
+            args:
+              branch: branch_name2
+              manifest: manifest_name2
+              lunch: lunch_name2
+          - type: validate
+            args:
+              test-tool: test_tool2
+              test-path: tests_smoke_tests
+          - type: freeze
+            args:
+              branch: branch_name2
+              manifest: manifest_name2
+              lunch: lunch_name2
+      - name: target3
+        branch: branch_name3
+        manifest: manifest_name3
+        lunch: lunch_name3
+        target_type: hw
+        actions:
+          - type: build
+            args:
+              branch: branch_name3
+              manifest: manifest_name3
+              lunch: lunch_name3
+          - type: validate
+            args:
+              test-tool: test_tool3
+              test-path: tests_smoke_tests
+          - type: freeze
+            args:
+              branch: branch_name3
+              manifest: manifest_name3
+              lunch: lunch_name3

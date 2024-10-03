@@ -1,26 +1,157 @@
-name: Android CI
+name: Dynamic Matrix Build Workflow
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    branches:
+      - master
 
 jobs:
-  build:
-
+  load-config:
     runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.set-matrix.outputs.targets }}
+      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          # Download and install yq and jq
+          curl -LO "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo mv yq_linux_amd64 /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+          curl -LO "https://github.com/stedolan/jq/releases/latest/download/jq-linux64"
+          sudo mv jq-linux64 /usr/local/bin/jq
+          sudo chmod +x /usr/local/bin/jq
+
+      - name: Read Config and Set Matrix
+        id: set-matrix
+        run: |
+          # Read the targets from config.yml using yq
+          TARGETS=$(yq eval -j '.release-groups[0].targets' ./.github/config/config.yml)
+          echo "Extracted targets: $TARGETS"
+
+          # Convert to JSON format suitable for matrix
+          MATRIX="{\"target\": $(echo $TARGETS | jq -c .)}"
+          echo "Matrix: $MATRIX"
+
+          echo "targets=$MATRIX" >> $GITHUB_OUTPUT
+  
+  extract-actions:
+    needs: load-config
+    runs-on: ubuntu-latest
+    outputs:
+      abc: ${{ steps.set-matrix.outputs.abc }}
+    strategy:
+      matrix: ${{ fromJson(needs.load-config.outputs.targets) }}
+        
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Extract actions
+        run: |
+          echo "Building for target: ${{ matrix.target.name }}"
+
+          echo "Raw actions output: ${{ fromJson(needs.load-config.outputs.targets) }}"
+
+          ACTIONS='[{"type": "build", "args": {"branch": "branch_name1", "manifest": "manifest_name1", "lunch": "lunch_name1"}},{"type": "validate", "args": {"test-tool": "test_tool1", "test-path": "tests/smoke_tests/"}},{"type": "freeze", "args": {"branch": "branch_name1", "manifest": "manifest_name1", "lunch": "lunch_name1"}}]'
+
+          # Create a valid JSON structure
+          OUTPUT="{\"actions\": $ACTIONS}"
+          echo "Extracted actions: $OUTPUT"
+
+          echo "abc=$ACTIONS" >> $GITHUB_OUTPUT
+
+  build:
+    runs-on: ubuntu-latest
+    needs: extract-actions
 
     steps:
-    - uses: actions/checkout@v4
-    - name: set up JDK 11
-      uses: actions/setup-java@v3
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Check out the code
+        uses: actions/checkout@v4
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew build
+      - name: Execute Build
+        run: |
+          echo "Raw actions output: ${{ toJson(needs.extract-actions.outputs) }}"
+
+          echo "Building for target: ${{ matrix.target.name }}"
+          echo "Branch: ${{ matrix.target.actions[0].args.branch }}"
+          echo "Manifest: ${{ matrix.target.actions[0].args.manifest }}"
+          echo "Lunch: ${{ matrix.target.actions[0].args.lunch }}"
+
+  # validate:
+  #   runs-on: ubuntu-latest
+  #   needs: [load-config, build]
+  #   strategy:
+  #     matrix: ${{ fromJson(needs.load-config.outputs.matrix) }}
+
+  #   steps:
+  #     - name: Check out the code
+  #       uses: actions/checkout@v4
+
+  #     - name: Run Validation
+  #       run: |
+  #         echo "Running validation for target: ${{ matrix.target.name }}"
+  #         echo "Test tool: ${{ matrix.target.actions[1].args.test-tool }}"
+  #         echo "Test path: ${{ matrix.target.actions[1].args.test-path }}"
+
+  # freeze:
+  #   runs-on: ubuntu-latest
+  #   needs: [load-config, build, validate]
+  #   strategy:
+  #     matrix: ${{ fromJson(needs.load-config.outputs.matrix) }}
+
+  #   steps:
+  #     - name: Check out the code
+  #       uses: actions/checkout@v4
+
+  #     - name: Execute Freeze
+  #       run: |
+  #         echo "Freezing for target: ${{ matrix.target.name }}"
+  #         echo "Branch: ${{ matrix.target.actions[2].args.branch }}"
+  #         echo "Manifest: ${{ matrix.target.actions[2].args.manifest }}"
+
+  # execute-targets:
+  #   runs-on: ubuntu-latest
+  #   needs: load-config
+  #   strategy:
+  #     matrix: ${{ fromJson(needs.load-config.outputs.matrix) }}
+  #   outputs:
+  #     actions: ${{ steps.set-actions.outputs.actions }}
+
+  #   steps:
+  #     - name: Checkout Repository
+  #       uses: actions/checkout@v4
+
+  #     - name: Set Up Build Environment
+  #       run: |
+  #         # echo "Building for target: ${{ matrix.target.name }}"
+  #         # echo "Branch: ${{ matrix.target.branch }}"
+  #         # echo "Manifest: ${{ matrix.target.manifest }}"
+  #         # echo "Lunch: ${{ matrix.target.lunch }}"
+
+  #         # ACTIONS="$(echo '${{ toJson(matrix.target.actions) }}' | jq -c .)"
+  #         ACTIONS="{\"type\":\"build\",\"args\":{\"branch\":\"branch_name1\",\"manifest\":\"manifest_name1\",\"lunch\":\"lunch_name1\"}}"
+  #         echo "Actions -- $ACTIONS"
+
+  #         echo "actions=$ACTIONS" >> $GITHUB_OUTPUT
+
+  # execute-actions:
+  #   runs-on: ubuntu-latest
+  #   needs: execute-targets
+  #   strategy:
+  #     matrix:
+  #       actions: ${{ fromJson(needs.execute-targets.outputs.actions) }}
+
+  #   steps:
+  #     - name: Checkout Repository
+  #       uses: actions/checkout@v4
+
+  #     - name: Execute Action
+  #       run: |
+  #         TARGET_NAME="${{ needs.execute-targets.outputs.target.name }}"
+  #         ACTION_TYPE="${{ matrix.action.type }}"
+  #         ACTION_ARGS="${{ toJson(matrix.action.args) }}"
